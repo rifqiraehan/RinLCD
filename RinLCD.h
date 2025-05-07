@@ -2,9 +2,9 @@
 #define RinLCD_h
 
 #include <inttypes.h>
-#include "LCD.h"
+#include <stddef.h>
 
-class RinLCD : public LCD {
+class RinLCD {
 public:
     RinLCD(uint8_t rs, uint8_t rw, uint8_t enable,
            uint8_t d0, uint8_t d1, uint8_t d2, uint8_t d3,
@@ -17,17 +17,23 @@ public:
     size_t cetak(const char str[]);
     void tulis(uint8_t value);
     void tulisBerjalan(const char* teksBaris0 = "", const char* teksBaris1 = "", uint16_t kecepatan = 100, uint16_t iterasi = 2);
-
-    virtual void send(uint8_t value, uint8_t mode) override;
+    void send(uint8_t value, uint8_t mode);
 
 private:
     void tulisNbit(uint8_t value, uint8_t numBits);
     void pulsaAktifkan();
+    void init();
+    void command(uint8_t value);
 
     uint8_t _pin_rs;
     uint8_t _pin_rw;
     uint8_t _pin_aktifkan;
     uint8_t _pin_data[8];
+    uint8_t _displayfunction;
+    uint8_t _displaycontrol;
+    uint8_t _displaymode;
+    uint8_t _numlines;
+    uint8_t _cols;
 };
 
 #endif

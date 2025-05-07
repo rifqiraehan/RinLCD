@@ -2,6 +2,30 @@
 #include <Arduino.h>
 
 #define WAKTU_EKSEKUSI 37
+#define LCD_CLEARDISPLAY 0x01
+#define LCD_RETURNHOME 0x02
+#define LCD_ENTRYMODESET 0x04
+#define LCD_DISPLAYCONTROL 0x08
+#define LCD_CURSORSHIFT 0x10
+#define LCD_FUNCTIONSET 0x20
+#define LCD_SETCGRAMADDR 0x40
+#define LCD_SETDDRAMADDR 0x80
+#define LCD_8BITMODE 0x10
+#define LCD_4BITMODE 0x00
+#define LCD_2LINE 0x08
+#define LCD_1LINE 0x00
+#define LCD_5x10DOTS 0x04
+#define LCD_5x8DOTS 0x00
+#define LCD_DISPLAYON 0x04
+#define LCD_DISPLAYOFF 0x00
+#define LCD_CURSORON 0x02
+#define LCD_CURSOROFF 0x00
+#define LCD_BLINKON 0x01
+#define LCD_BLINKOFF 0x00
+#define LCD_ENTRYLEFT 0x02
+#define LCD_ENTRYRIGHT 0x00
+#define LCD_ENTRYSHIFTINCREMENT 0x01
+#define LCD_ENTRYSHIFTDECREMENT 0x00
 
 RinLCD::RinLCD(uint8_t rs, uint8_t rw, uint8_t enable,
                uint8_t d0, uint8_t d1, uint8_t d2, uint8_t d3,
@@ -31,28 +55,80 @@ RinLCD::RinLCD(uint8_t rs, uint8_t rw, uint8_t enable,
     _displayfunction = LCD_8BITMODE | LCD_1LINE | LCD_5x8DOTS;
 }
 
+void RinLCD::init() {
+    digitalWrite(_pin_rs, LOW);
+    digitalWrite(_pin_aktifkan, LOW);
+    if (_pin_rw != 255) {
+        digitalWrite(_pin_rw, LOW);
+    }
+
+    delayMicroseconds(50000);
+    send(0x30, 0);
+    delayMicroseconds(4500);
+    send(0x30, 0);
+    delayMicroseconds(150);
+    send(0x30, 0);
+
+    if (!(_displayfunction & LCD_8BITMODE)) {
+        send(0x20, 0);
+    }
+
+    command(LCD_FUNCTIONSET | _displayfunction);
+    delayMicroseconds(50);
+
+    _displaycontrol = LCD_DISPLAYON | LCD_CURSOROFF | LCD_BLINKOFF;
+    command(LCD_DISPLAYCONTROL | _displaycontrol);
+    delayMicroseconds(50);
+
+    bersihkan();
+
+    _displaymode = LCD_ENTRYLEFT | LCD_ENTRYSHIFTDECREMENT;
+    command(LCD_ENTRYMODESET | _displaymode);
+    delayMicroseconds(50);
+}
+
 void RinLCD::mulai(uint8_t cols, uint8_t rows) {
-    begin(cols, rows);
+    _cols = cols;
+    _numlines = rows;
+
+    if (rows > 1) {
+        _displayfunction |= LCD_2LINE;
+    }
+    init();
 }
 
 void RinLCD::bersihkan() {
-    clear();
+    command(LCD_CLEARDISPLAY);
+    delayMicroseconds(2000);
 }
 
 void RinLCD::buatKarakter(uint8_t location, uint8_t charmap[]) {
-    createChar(location, charmap);
+    location &= 0x7;
+    command(LCD_SETCGRAMADDR | (location << 3));
+    for (int i = 0; i < 8; i++) {
+        send(charmap[i], 1);
+    }
 }
 
 void RinLCD::aturKursor(uint8_t col, uint8_t row) {
-    setCursor(col, row);
+    int row_offsets[] = {0x00, 0x40, 0x14, 0x54};
+    if (row >= _numlines) {
+        row = _numlines - 1;
+    }
+    command(LCD_SETDDRAMADDR | (col + row_offsets[row]));
 }
 
 size_t RinLCD::cetak(const char str[]) {
-    return print(str);
+    size_t n = 0;
+    while (*str) {
+        tulis(*str++);
+        n++;
+    }
+    return n;
 }
 
 void RinLCD::tulis(uint8_t value) {
-    write(value);
+    send(value, 1);
 }
 
 void RinLCD::tulisBerjalan(const char* teksBaris0, const char* teksBaris1, uint16_t kecepatan, uint16_t iterasi) {
@@ -94,21 +170,21 @@ void RinLCD::tulisBerjalan(const char* teksBaris0, const char* teksBaris1, uint1
 }
 
 void RinLCD::send(uint8_t value, uint8_t mode) {
-    digitalWrite(_pin_rs, (mode == LCD_DATA));
+    digitalWrite(_pin_rs, mode);
     if (_pin_rw != 255) {
         digitalWrite(_pin_rw, LOW);
     }
-    if (mode != FOUR_BITS) {
-        if (_displayfunction & LCD_8BITMODE) {
-            tulisNbit(value, 8);
-        } else {
-            tulisNbit(value >> 4, 4);
-            tulisNbit(value, 4);
-        }
+    if (_displayfunction & LCD_8BITMODE) {
+        tulisNbit(value, 8);
     } else {
+        tulisNbit(value >> 4, 4);
         tulisNbit(value, 4);
     }
-    waitUsec(WAKTU_EKSEKUSI);
+    delayMicroseconds(WAKTU_EKSEKUSI);
+}
+
+void RinLCD::command(uint8_t value) {
+    send(value, 0);
 }
 
 void RinLCD::tulisNbit(uint8_t value, uint8_t numBits) {
@@ -120,6 +196,6 @@ void RinLCD::tulisNbit(uint8_t value, uint8_t numBits) {
 
 void RinLCD::pulsaAktifkan() {
     digitalWrite(_pin_aktifkan, HIGH);
-    waitUsec(1);
+    delayMicroseconds(1);
     digitalWrite(_pin_aktifkan, LOW);
 }
